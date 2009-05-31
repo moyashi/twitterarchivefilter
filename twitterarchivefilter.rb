@@ -258,3 +258,4 @@ if $0 == __FILE__
   puts "Succeed Twitter Archive!! > #{logfilename}"
 
 end
+
