@@ -195,6 +195,7 @@ class TwitterArchiveFilter
       process 'a[href*="page="]' , "pages[]" => "@href" , "kinds[]" => :text
       result :pages , :kinds
     end.scrape( html , :parser_options => {:char_encoding=>'utf8'} )
+    return nil unless links[:kinds]
 	  i = links[:kinds].index links[:kinds].find{|v| v =~ /more/ }
 	  return nil unless i
     return links[:pages][i].gsub(/(\/.+?)\?max_id=\d+?\&amp;(page=\d+?)\&amp;twttr=true/, "\\1?\\2")
