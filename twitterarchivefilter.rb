@@ -3,6 +3,7 @@ $KCODE="u"
 # ====================================================================================
 # Twitter Archive Filter
 #
+# 1.1.0 => 2009/05/31 by moyashi
 # 1.0.9 => 2009/03/02 by Seasons
 # 1.0.8 => 2009/02/26 by Seasons
 # 1.0.7 => 2009/01/02 by Seasons
@@ -24,6 +25,7 @@ $KCODE="u"
 require 'rubygems'
 require 'scrapi'
 require 'net/http'
+require 'mechanize'
 require 'kconv'
 require 'optparse'
 require 'pp'
@@ -43,7 +45,9 @@ end
 #-------------------------------------------------------------------------------------
 # System Config
 #-------------------------------------------------------------------------------------
-BASEPATH = '/home' #=> if you want a recent timeline
+BASEPATH = '/' #=> if you want a recent timeline
+BASE_URL = 'http://twitter.com'
+USER_AGENT = 'Windows IE 6'
 #-------------------------------------------------------------------------------------
 
 # *=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=
@@ -60,6 +64,32 @@ class TwitterArchiveFilter
     @pagenum = pagenum
     @http = Net::HTTP.new( 'twitter.com', 80 )
     @keyword_reg = usebrace ? /\[#{keyword}\]/i : /#{keyword}/i
+    @agent = self.getAgent()
+  end
+
+  # ===========================================================================
+  # @brief : get mechanize agent
+  #
+  # @param : none
+  #
+  # @ret : Mechanize object
+  # ===========================================================================
+  def getAgent()
+    return nil unless $username && $username
+    begin
+      agent = WWW::Mechanize.new
+      agent.max_history = 1
+      agent.user_agent_alias = USER_AGENT
+      login_page = agent.get( BASE_URL + '/login' )
+      login_form = login_page.forms[1]
+      login_form['session[username_or_email]'] = $username
+      login_form['session[password]'] = $password
+      agent.submit(login_form)
+      return agent
+    rescue => ex
+      p ex.message
+      exit
+    end
   end
 
   # ===========================================================================
@@ -145,9 +175,8 @@ class TwitterArchiveFilter
   # ===========================================================================
   def getItems( html )
     items = Scraper.define do
-      process 'span.entry_content' , "messages[]" => :text
       process 'span.entry-content' , "messages[]" => :text
-      process 'a.entry-date>span.published' , "times[]" => :text
+      process 'span.published' , "times[]" => :text
       result :messages , :times
     end.scrape( html , :parser_options => {:char_encoding=>'utf8'} )
     items
@@ -166,9 +195,9 @@ class TwitterArchiveFilter
       process 'a[href*="page="]' , "pages[]" => "@href" , "kinds[]" => :text
       result :pages , :kinds
     end.scrape( html , :parser_options => {:char_encoding=>'utf8'} )
-	  i = links[:kinds].index links[:kinds].find{|v| v =~ /Older/ }
+	  i = links[:kinds].index links[:kinds].find{|v| v =~ /more/ }
 	  return nil unless i
-    return links[:pages][i]
+    return links[:pages][i].gsub(/(\/.+?)\?max_id=\d+?\&amp;(page=\d+?)\&amp;twttr=true/, "\\1?\\2")
 
   end
 
@@ -182,9 +211,7 @@ class TwitterArchiveFilter
   # ===========================================================================
   def getPageArchive( page )
     html = ""
-    req = Net::HTTP::Get.new( page )
-    req.basic_auth( $username , $password ) if $username and $password
-    rs = @http.request( req )
+    rs = @agent.get( BASE_URL + page )
     return html unless rs
     html= rs.body
 
@@ -231,4 +258,3 @@ if $0 == __FILE__
   puts "Succeed Twitter Archive!! > #{logfilename}"
 
 end
-
